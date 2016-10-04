@@ -10,8 +10,7 @@
 
 #Preparaion on local machine
 
-##Install sshpass and other tools
-
+##Install sshpass and other tools on local machine, currently support Ubuntu and CentOS
 DISTR=`cat /etc/*release | grep DISTRIB_ID |cut -d'=' -f2`
 if [ $DISTR='Ubuntu' ]
 then 
@@ -19,6 +18,12 @@ then
 else
    yum install -y sshpass openssh-clients ipmitool >/dev/null
 fi
+
+#This is the flag for OS type, 
+OS_LINUX=1
+OS_WINDOWS=2
+OS_VMWARE=3
+OS_FLAG=0
 
 ##Assemble command#1 for ssh
 IP=$1
