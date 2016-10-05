@@ -93,7 +93,7 @@ then
       printf "IPMI login unsuccessful"
    fi
 else
-   printf "Usage: $0 ssh_ip_address ssh_user ssh_password ipmi_ip ipmi_user ipmi_password"; exit 1;
+   printf "Usage: $0 ssh_ip_address ssh_user ssh_password ipmi_ip ipmi_user ipmi_password\n"; exit 1;
 fi
 
 #script running time
