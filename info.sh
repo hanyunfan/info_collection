@@ -25,11 +25,12 @@ OS_WINDOWS=2
 OS_VMWARE=3
 OS_FLAG=0
 
-##Assemble command#1 for ssh
+##Assemble command#1 for Inband SSH or WMI
 IP=$1
 SSHUSER=$2
 SSHPW=$3
 SSH="sshpass -p $SSHPW ssh $SSHUSER@$IP" 
+WMI="./wmic -U$SSHUSER%$SSHPW //$IP"
 
 ##Assemble command#2 for IPMI
 IPMIIP=$4
@@ -66,12 +67,23 @@ then
    #Check if 1st one is IP address; if not exist.
    if validate_IP $IP
    then
-      #Test connnection with ssh username and password
-      $SSH uptime &>/dev/null
-      if [ "$?" != 0 ]; then printf "Cannot connect to remote server by SSH"; exit 1; fi 
+      #Test SSH
+      if $SSH uptime $>/dev/null; then
+         OS_FLAG=$OS_LINUX;  
+      #Test Windows
+      elif $WMI "SELECT Caption FROM Win32_OperatingSystem" >/dev/null ; then
+         OS_FLAG=$OS_WINDOWS;
+      #Test VMWARE
+      #Place holder
+      elif [ 1 == 2 ] ; then
+         OS_FLAG=$OS_VMWARE;
+      else 
+         exit 1;
+      fi 
    else
-      printf "SSH login unsuccessful"
+      printf "Inband login unsuccessful"
    fi
+
    if validate_IP $IPMIIP
    then
       #Test IPMI connection
@@ -81,7 +93,7 @@ then
       printf "IPMI login unsuccessful"
    fi
 else
-   printf "Usage: ./info ssh_ip_address ssh_user ssh_password ipmi_ip ipmi_user ipmi_password"; exit 1;
+   printf "Usage: $0 ssh_ip_address ssh_user ssh_password ipmi_ip ipmi_user ipmi_password"; exit 1;
 fi
 
 #script running time
@@ -89,35 +101,116 @@ date
 
 #check() is nothing but a wrapper
 check_info(){
-#check_info Type Linux_cmd
 printf "\n$1\n"
-$SSH "echo $SSHPW | sudo -S $2"
+case $OS_FLAG in
+   1)
+     #Check_info Type Linux_cmd
+     $SSH "echo $SSHPW | sudo -S $2"
+    ;;
+   2)
+     #Check_info Type WMI_cmd
+     #Consider to use printf to format the output
+     $WMI "$2"
+   ;; 
+   3)
+   ;;
+   *)
+   exit 1
+esac
 return 0
 }
 
 #CPU
-check_info CPU "dmidecode -t 4 | egrep 'Manufacturer:|Family:|Version|Count'" 
+case $OS_FLAG in
+   1)
+      check_info CPU "dmidecode -t 4 | egrep 'Manufacturer:|Family:|Version|Count'" 
+    ;;
+   2)
+      check_info CPU "SELECT Name,NumberOfCores,NumberOfLogicalProcessors FROM win32_processor"
+   ;; 
+   3)
+   ;;
+   *)
+   exit 1
+esac
+
 
 #Memory
-$SSH 'cat /proc/meminfo | grep MemTotal'
-##locations (need sudo rights)
-check_info Memory "dmidecode -t memory| egrep 'Locator|Size|Serial Number'"
+case $OS_FLAG in
+   1)
+     $SSH 'cat /proc/meminfo | grep MemTotal'
+     ##locations (need sudo rights)
+     check_info Memory "dmidecode -t memory| egrep 'Locator|Size|Serial Number'"
+    ;;
+   2)
+     check_info Memory "SELECT Model,PartNumber,DeviceLocator,PositionInRow FROM Win32_PhysicalMemory"
+   ;; 
+   3)
+   ;;
+   *)
+   exit 1
+esac
 
 #HDD/SSD
-check_info "Local disks" "cat /proc/scsi/scsi | grep -v Virtual | grep -B 1 Model"
+case $OS_FLAG in
+   1)
+     check_info "Local disks" "cat /proc/scsi/scsi | grep -v Virtual | grep -B 1 Model"
+    ;;
+   2)
+     check_info "Local disks" "SELECT Caption,DeviceID,FileSystem,Size,VolumeSerialNumber FROM win32_logicaldisk"
+   ;; 
+   3)
+   ;;
+   *)
+   exit 1
+esac
 
 #RAID controller
 ##Model
 ##disk status throught RAID controller may need to have RAID tools installed.
 
 #Motherboard
-check_info Motherboard "dmidecode -t baseboard| egrep 'Manufacturer|Product|Serial'"
+case $OS_FLAG in
+   1)
+     check_info Motherboard "dmidecode -t baseboard| egrep 'Manufacturer|Product|Serial'"
+    ;;
+   2)
+     check_info Motherboard "SELECT Manufacturer,SerialNumber,Version FROM win32_baseboard"
+     check_info System "SELECT Manufacturer,Model from Win32_ComputerSystem" 
+   ;; 
+   3)
+   ;;
+   *)
+   exit 1
+esac
 
 #BIOS
-check_info BIOS "dmidecode -t bios| egrep 'Version|Release|Revision'"
+case $OS_FLAG in
+   1)
+     check_info BIOS "dmidecode -t bios| egrep 'Version|Release|Revision'"
+    ;;
+   2)
+     check_info BIOS "SELECT SMBIOSBIOSVersion FROM win32_BIOS"
+   ;; 
+   3)
+   ;;
+   *)
+   exit 1
+esac
 
 #OS Disturbutuion
-check_info "OS info" "uname -a"
+case $OS_FLAG in
+   1)
+     check_info "OS info" "uname -a"
+    ;;
+   2)
+     check_info "OS info" "SELECT Caption FROM Win32_OperatingSystem"
+   ;; 
+   3)
+   ;;
+   *)
+   exit 1
+esac
 
 #FileSystem
 ##Type
@@ -125,10 +218,32 @@ check_info "OS info" "uname -a"
 #Network Cards
 #Part of PCIe output
 #MAC
-check_info MAC "ifconfig | grep HWaddr"
+case $OS_FLAG in
+   1)
+     check_info MAC "ifconfig | grep HWaddr"
+    ;;
+   2)
+     check_info MAC "SELECT Caption,MACAddress,IPAddress FROM win32_NetworkAdapterConfiguration where IPEnabled = True"
+   ;; 
+   3)
+   ;;
+   *)
+   exit 1
+esac
 
 #PCIe slots
-check_info PCIe "dmidecode -t slot| egrep 'Designation|Current|Bus'"
+case $OS_FLAG in
+   1)
+     check_info PCIe "dmidecode -t slot| egrep 'Designation|Current|Bus'"
+    ;;
+   2)
+     check_info PCIe "SELECT Description,Manufacturer,Model,PartNumber,SerialNumber,Tag FROM Win32_OnBoardDevice"
+   ;; 
+   3)
+   ;;
+   *)
+   exit 1
+esac
 
 #Fans
 $IPMI sdr type "Fan" |cut -d'|' -f1,3
@@ -137,7 +252,18 @@ $IPMI sdr type "Fan" |cut -d'|' -f1,3
 $IPMI sdr type "Power Supply"
 
 #USB device
-check_info USB "cat /sys/kernel/debug/usb/devices |egrep '^S:'"
+case $OS_FLAG in
+   1)
+     check_info USB "cat /sys/kernel/debug/usb/devices |egrep '^S:'"
+    ;;
+   2)
+     check_info USB "SELECT * FROM Win32_USBControllerDevice"
+   ;; 
+   3)
+   ;;
+   *)
+   exit 1
+esac
 
 #reserved for func of formating the outputs
 
