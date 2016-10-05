@@ -1,5 +1,5 @@
 #!/bin/bash
-#set -x
+set -x
 
 # Script created by Frank Han,
 # Date: 9/26/2016
@@ -12,10 +12,11 @@
 
 ##Install sshpass and other tools on local machine, currently support Ubuntu and CentOS
 DISTR=`cat /etc/*release | grep DISTRIB_ID |cut -d'=' -f2`
-if [ $DISTR='Ubuntu' ]
+if [ "$DISTR" = "Ubuntu" ]
 then 
    apt-get install -y sshpass openssh-client ipmitool >/dev/null
 else
+   yum install -y epel-release
    yum install -y sshpass openssh-clients ipmitool >/dev/null
 fi
 
@@ -29,7 +30,7 @@ OS_FLAG=0
 IP=$1
 SSHUSER=$2
 SSHPW=$3
-SSH="sshpass -p $SSHPW ssh $SSHUSER@$IP" 
+SSH="sshpass -p $SSHPW ssh -oStrictHostKeyChecking=no $SSHUSER@$IP" 
 WMI="./wmic -U$SSHUSER%$SSHPW //$IP"
 
 ##Assemble command#2 for IPMI
@@ -68,7 +69,7 @@ then
    if validate_IP $IP
    then
       #Test SSH
-      if $SSH uptime $>/dev/null; then
+      if $SSH uptime &>/dev/null; then
          OS_FLAG=$OS_LINUX;  
       #Test Windows
       elif $WMI "SELECT Caption FROM Win32_OperatingSystem" >/dev/null ; then
