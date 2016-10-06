@@ -5,8 +5,13 @@ set -x
 # Date: 9/26/2016
 # For retrieve remote Linux system info.
 #
-# Usage ./info ssh_ip_address ssh_user ssh_password ipmi_ip ipmi_user ipmi_password
+# Usage ./info ssh_ip_address ssh_user 'ssh_password' ipmi_ip ipmi_user 'ipmi_password'
 #
+
+if [[ $# -ne 6 ]] ; then
+   printf "Usage: $0 ssh_ip_address ssh_user 'ssh_password' ipmi_ip ipmi_user 'ipmi_password'\n"; exit 1;
+   exit 1
+fi
 
 #Preparaion on local machine
 
@@ -26,17 +31,21 @@ OS_WINDOWS=2
 OS_VMWARE=3
 OS_FLAG=0
 
-##Assemble command#1 for Inband SSH or WMI
-IP=$1
-SSHUSER=$2
-SSHPW=$3
+##Assemble command#1 for Inband OSs
+IP="$1"
+SSHUSER="$2"
+SSHPW="$3"
+#Linux
 SSH="sshpass -p $SSHPW ssh -oStrictHostKeyChecking=no $SSHUSER@$IP" 
+#Windows
 WMI="./wmic -U$SSHUSER%$SSHPW //$IP"
+#VMWare
+VCLI="esxcli -s $IP -u $SSHUSER -p $SSHPW "
 
 ##Assemble command#2 for IPMI
-IPMIIP=$4
-IPMIUSER=$5
-IPMIPW=$6
+IPMIIP="$4"
+IPMIUSER="$5"
+IPMIPW="$6"
 IPMI="ipmitool -I lanplus -H $IPMIIP -U $IPMIUSER -P $IPMIPW"
 
 ##IP validation function
@@ -62,39 +71,41 @@ fi
 return 0;
 }
 
-#Check if inputs has all 6 parameters
-if [ "$#" -eq 6 ] 
-then
-   #Check if 1st one is IP address; if not exist.
-   if validate_IP $IP
-   then
-      #Test SSH
-      if $SSH uptime &>/dev/null; then
-         OS_FLAG=$OS_LINUX;  
-      #Test Windows
-      elif $WMI "SELECT Caption FROM Win32_OperatingSystem" >/dev/null ; then
-         OS_FLAG=$OS_WINDOWS;
-      #Test VMWARE
-      #Place holder
-      elif [ 1 == 2 ] ; then
-         OS_FLAG=$OS_VMWARE;
-      else 
-         exit 1;
-      fi 
-   else
-      printf "Inband login unsuccessful"
-   fi
 
-   if validate_IP $IPMIIP
-   then
-      #Test IPMI connection
-      $IPMI chassis selftest &>/dev/null
-      if [ "$?" != 0 ]; then printf "Cannot connect to remote server by IPMI"; exit 1; fi
-   else
-      printf "IPMI login unsuccessful"
-   fi
+
+
+#Check if 1st one is IP address; if not exist.
+if validate_IP $IP
+then
+   #Prepare for VMWare ahead
+   #Use eval command to get the correct result from sub-shell
+   if [ $VI_THUMBPRINT != "" ] ; then export VI_THUMBPRINT=""; fi
+   export VI_THUMBPRINT=`eval $VCLI hardware |cut -d ' ' -f8`
+   #printf "Waiting on OS detection.\n"
+   #Test VMWARE if vCli doesn't work and the machine can do SSH, then treat it as Linux
+   if $VCLI hardware &>/dev/null; then
+      OS_FLAG=$OS_VMWARE;
+   #Test SSH
+   elif $SSH uptime &>/dev/null; then
+      OS_FLAG=$OS_LINUX;  
+   elif printf "Waiting on OS detection.\n" && $WMI "SELECT Caption FROM Win32_OperatingSystem" >/dev/null ; then
+   #Test Windows
+      OS_FLAG=$OS_WINDOWS;
+   else 
+      printf "Error: Cannot detect the Operating system on the remote system.\n"
+      exit 1;
+   fi 
 else
-   printf "Usage: $0 ssh_ip_address ssh_user ssh_password ipmi_ip ipmi_user ipmi_password\n"; exit 1;
+   printf "Inband login unsuccessful"
+fi
+
+if validate_IP $IPMIIP
+then
+   #Test IPMI connection
+   $IPMI chassis selftest &>/dev/null
+   if [ "$?" != 0 ]; then printf "Cannot connect to remote server by IPMI"; exit 1; fi
+else
+   printf "IPMI login unsuccessful"
 fi
 
 #script running time
@@ -103,6 +114,8 @@ date
 #check() is nothing but a wrapper
 check_info(){
 printf "\n$1\n"
+echo $#
+echo $@
 case $OS_FLAG in
    1)
      #Check_info Type Linux_cmd
@@ -111,9 +124,11 @@ case $OS_FLAG in
    2)
      #Check_info Type WMI_cmd
      #Consider to use printf to format the output
-     $WMI "$2"
+     $WMI "$3"
    ;; 
    3)
+     #Check_info Type VMWare_cmd
+     $VCLI $4
    ;;
    *)
    exit 1
@@ -122,96 +137,28 @@ return 0
 }
 
 #CPU
-case $OS_FLAG in
-   1)
-      check_info CPU "dmidecode -t 4 | egrep 'Manufacturer:|Family:|Version|Count'" 
-    ;;
-   2)
-      check_info CPU "SELECT Name,NumberOfCores,NumberOfLogicalProcessors FROM win32_processor"
-   ;; 
-   3)
-   ;;
-   *)
-   exit 1
-esac
-
+#check_info TYPE Linux_cmd WMI_cmd VMWare_cmd
+check_info CPU "dmidecode -t 4 | egrep 'Manufacturer:|Family:|Version|Count'" "SELECT Name,NumberOfCores,NumberOfLogicalProcessors FROM win32_processor" "hardware cpu global get"
 
 #Memory
-case $OS_FLAG in
-   1)
-     $SSH 'cat /proc/meminfo | grep MemTotal'
-     ##locations (need sudo rights)
-     check_info Memory "dmidecode -t memory| egrep 'Locator|Size|Serial Number'"
-    ;;
-   2)
-     check_info Memory "SELECT Model,PartNumber,DeviceLocator,PositionInRow FROM Win32_PhysicalMemory"
-   ;; 
-   3)
-   ;;
-   *)
-   exit 1
-esac
+     check_info Memory "dmidecode -t memory| egrep 'Locator|Size|Serial Number'" "SELECT Model,PartNumber,DeviceLocator,PositionInRow FROM Win32_PhysicalMemory" "hardware memory get"
 
 #HDD/SSD
-case $OS_FLAG in
-   1)
-     check_info "Local disks" "cat /proc/scsi/scsi | grep -v Virtual | grep -B 1 Model"
-    ;;
-   2)
-     check_info "Local disks" "SELECT Caption,DeviceID,FileSystem,Size,VolumeSerialNumber FROM win32_logicaldisk"
-   ;; 
-   3)
-   ;;
-   *)
-   exit 1
-esac
+     check_info "Local disks" "cat /proc/scsi/scsi | grep -v Virtual | grep -B 1 Model" "SELECT Caption,DeviceID,FileSystem,Size,VolumeSerialNumber FROM win32_logicaldisk" "storage core device list"
 
 #RAID controller
 ##Model
 ##disk status throught RAID controller may need to have RAID tools installed.
 
 #Motherboard
-case $OS_FLAG in
-   1)
-     check_info Motherboard "dmidecode -t baseboard| egrep 'Manufacturer|Product|Serial'"
-    ;;
-   2)
-     check_info Motherboard "SELECT Manufacturer,SerialNumber,Version FROM win32_baseboard"
-     check_info System "SELECT Manufacturer,Model from Win32_ComputerSystem" 
-   ;; 
-   3)
-   ;;
-   *)
-   exit 1
-esac
+     check_info Motherboard "dmidecode -t baseboard| egrep 'Manufacturer|Product|Serial'" "SELECT Manufacturer,SerialNumber,Version FROM win32_baseboard" "hardware platform get"
+     check_info Motherboard "dmidecode -t baseboard| egrep 'Manufacturer|Product|Serial'" "SELECT Manufacturer,Model from Win32_ComputerSystem" "hardware platform get"
 
 #BIOS
-case $OS_FLAG in
-   1)
-     check_info BIOS "dmidecode -t bios| egrep 'Version|Release|Revision'"
-    ;;
-   2)
-     check_info BIOS "SELECT SMBIOSBIOSVersion FROM win32_BIOS"
-   ;; 
-   3)
-   ;;
-   *)
-   exit 1
-esac
+     check_info BIOS "dmidecode -t bios| egrep 'Version|Release|Revision'" "SELECT SMBIOSBIOSVersion FROM win32_BIOS" "hardware ipmi fru list"
 
 #OS Disturbutuion
-case $OS_FLAG in
-   1)
-     check_info "OS info" "uname -a"
-    ;;
-   2)
-     check_info "OS info" "SELECT Caption FROM Win32_OperatingSystem"
-   ;; 
-   3)
-   ;;
-   *)
-   exit 1
-esac
+     check_info "OS info" "uname -a" "OS info" "SELECT Caption FROM Win32_OperatingSystem" "system version get"
 
 #FileSystem
 ##Type
@@ -219,32 +166,10 @@ esac
 #Network Cards
 #Part of PCIe output
 #MAC
-case $OS_FLAG in
-   1)
-     check_info MAC "ifconfig | grep HWaddr"
-    ;;
-   2)
-     check_info MAC "SELECT Caption,MACAddress,IPAddress FROM win32_NetworkAdapterConfiguration where IPEnabled = True"
-   ;; 
-   3)
-   ;;
-   *)
-   exit 1
-esac
+     check_info MAC "ifconfig | grep HWaddr" "SELECT Caption,MACAddress,IPAddress FROM win32_NetworkAdapterConfiguration where IPEnabled = True" "network nic list"
 
 #PCIe slots
-case $OS_FLAG in
-   1)
-     check_info PCIe "dmidecode -t slot| egrep 'Designation|Current|Bus'"
-    ;;
-   2)
-     check_info PCIe "SELECT Description,Manufacturer,Model,PartNumber,SerialNumber,Tag FROM Win32_OnBoardDevice"
-   ;; 
-   3)
-   ;;
-   *)
-   exit 1
-esac
+     check_info PCIe "dmidecode -t slot| egrep 'Designation|Current|Bus'" "SELECT Description,Manufacturer,Model,PartNumber,SerialNumber,Tag FROM Win32_OnBoardDevice" "hardware pci list"
 
 #Fans
 $IPMI sdr type "Fan" |cut -d'|' -f1,3
@@ -253,18 +178,7 @@ $IPMI sdr type "Fan" |cut -d'|' -f1,3
 $IPMI sdr type "Power Supply"
 
 #USB device
-case $OS_FLAG in
-   1)
-     check_info USB "cat /sys/kernel/debug/usb/devices |egrep '^S:'"
-    ;;
-   2)
-     check_info USB "SELECT * FROM Win32_USBControllerDevice"
-   ;; 
-   3)
-   ;;
-   *)
-   exit 1
-esac
+     check_info USB "cat /sys/kernel/debug/usb/devices |egrep '^S:'" "SELECT * FROM Win32_USBControllerDevice" "hardware bootdevice list"
 
 #reserved for func of formating the outputs
 
