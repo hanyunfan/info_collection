@@ -1,5 +1,5 @@
 #!/bin/bash
-set -x
+#set -x
 
 # Script created by Frank Han,
 # Date: 9/26/2016
@@ -19,10 +19,10 @@ fi
 DISTR=`cat /etc/*release | grep DISTRIB_ID |cut -d'=' -f2`
 if [ "$DISTR" = "Ubuntu" ]
 then 
-   apt-get install -y sshpass openssh-client ipmitool >/dev/null
+   apt-get install -y sshpass openssh-client ipmitool &>/dev/null
 else
-   yum install -y epel-release
-   yum install -y sshpass openssh-clients ipmitool >/dev/null
+   yum install -y epel-release &>/dev/null
+   yum install -y sshpass openssh-clients ipmitool &>/dev/null
 fi
 
 #This is the flag for OS type, 
@@ -114,8 +114,8 @@ date
 #check() is nothing but a wrapper
 check_info(){
 printf "\n$1\n"
-echo $#
-echo $@
+#echo $#
+#echo $@
 case $OS_FLAG in
    1)
      #Check_info Type Linux_cmd
@@ -158,7 +158,7 @@ check_info CPU "dmidecode -t 4 | egrep 'Manufacturer:|Family:|Version|Count'" "S
      check_info BIOS "dmidecode -t bios| egrep 'Version|Release|Revision'" "SELECT SMBIOSBIOSVersion FROM win32_BIOS" "hardware ipmi fru list"
 
 #OS Disturbutuion
-     check_info "OS info" "uname -a" "OS info" "SELECT Caption FROM Win32_OperatingSystem" "system version get"
+     check_info "OS info" "uname -a" "SELECT Caption FROM Win32_OperatingSystem" "system version get"
 
 #FileSystem
 ##Type
