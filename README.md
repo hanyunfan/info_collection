@@ -1,5 +1,3 @@
-# Info_Collection
-
 <snippet>
   <content><![CDATA[
 # ${1:Info_Collection}
