@@ -3,7 +3,18 @@
 
 # Script created by Frank Han,
 # Date: 9/26/2016
-# For retrieve remote Linux system info.
+# For retrieve remote Linux/Windows/VMWare system info.
+
+#Check if vCLI was installed on host machine
+
+if [ ! -f /usr/bin/esxcli ]; then 
+   printf "In order to remotely call a ESXi system, you need to have vCLI installed on the host system under '/usr/bin/esxcil'.\n Installation please refer to https://my.vmware.com/web/vmware/details?downloadGroup=VCLI600&productId=491\n" 
+   exit 1
+fi
+
+
+
+
 #
 # Usage ./info ssh_ip_address ssh_user 'ssh_password' ipmi_ip ipmi_user 'ipmi_password'
 #
@@ -79,7 +90,7 @@ if validate_IP $IP
 then
    #Prepare for VMWare ahead
    #Use eval command to get the correct result from sub-shell
-   if [ $VI_THUMBPRINT != "" ] ; then export VI_THUMBPRINT=""; fi
+   if [ $VI_THUMBPRINT !="" ] ; then export VI_THUMBPRINT=""; fi
    export VI_THUMBPRINT=`eval $VCLI hardware |cut -d ' ' -f8`
    #printf "Waiting on OS detection.\n"
    #Test VMWARE if vCli doesn't work and the machine can do SSH, then treat it as Linux
