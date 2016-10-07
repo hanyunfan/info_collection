@@ -16,7 +16,7 @@ fi
 
 
 #
-# Usage ./info ssh_ip_address ssh_user 'ssh_password' ipmi_ip ipmi_user 'ipmi_password'
+# Usage ./info.sh ssh_ip_address ssh_user 'ssh_password' ipmi_ip ipmi_user 'ipmi_password'
 #
 
 if [[ $# -ne 6 ]] ; then
