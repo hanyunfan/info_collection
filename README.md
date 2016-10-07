@@ -1,5 +1,3 @@
-<snippet>
-  <content><![CDATA[
 # ${1:Info_Collection}
 
 This script is use to retrieve info from Windows/Liunx/VMWare ESXi, info.sh is the main script, which auto detects the OS.
@@ -58,6 +56,3 @@ See also the list of [contributors](https://github.com/hanyunfan/info_collection
 ## License
 
 This project is licensed under the GNU GPLv3 License - see the [LICENSE.md](LICENSE.md) file for details
-]]></content>
-  <tabTrigger>readme</tabTrigger>
-</snippet>
