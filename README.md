@@ -1,4 +1,4 @@
-# ${1:Info_Collection}
+# Info_Collection
 
 This script is use to retrieve info from Windows/Liunx/VMWare ESXi, info.sh is the main script, which auto detects the OS.
 
