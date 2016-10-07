@@ -15,7 +15,7 @@ On linux part, ssh service need to be enabled on the host machine and currently 
 
 ## Installation
 
-Download and run
+Download everything and run
 
 ## Usage
 
